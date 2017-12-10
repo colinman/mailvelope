@@ -409,7 +409,7 @@
   },
   "key_gen_upload": {
     "description": "Upload key to Mailvelope key server checkbox",
-    "message": "Upload public key to Mailvelope Key Server (can be deleted at any time)"
+    "message": "Upload public key to PBFT Key directory"
   },
   "learn_more_link": {
     "description": "Text of a link to a learn-more resource",
@@ -797,7 +797,7 @@
   },
   "keyring_generate_key": {
     "description": "Tab of keyring to generate key.",
-    "message": "Generate Key"
+    "message": "Create or Replace Key"
   },
   "keyring_header": {
     "description": "Header of the key ring.",

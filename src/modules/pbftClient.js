@@ -47,14 +47,34 @@ export class PBFTClient {
       keySize: 4096,
       publicKeyArmored: options.publicKeyArmored};
 
-    return this._broadcast(this._path(options.email), "POST", JSON.stringify(payload))
-      .then(r => {
-        console.log(`Committed: ${JSON.stringify(r)}`);
-        return r;
-      })
+    // Lookup first to see if we need to ask for a signature
+    return this.lookup(options.email)
+      .then(() => this._broadcast(this._path(options.email), "PUT", JSON.stringify(payload))
+            .then(r => {
+              console.log(`Committed: ${JSON.stringify(r)}`);
+              return r;
+            })
+            .catch(e => {
+              console.log(`Error: ${JSON.stringify(e)}`);
+              throw {message: e};
+            }))
       .catch(e => {
-        console.log(`Error: ${JSON.stringify(e)}`);
-        throw {message: e};
+        // Semi-hacky way to see if lookup returned with NOT FOUND
+        if (e.startsWith(404)) {
+          const signature = window.prompt("This is a new email. Please acquire signature for key and paste here");
+          console.log(signature);
+          return this._broadcast(this._path(options.email), "POST", JSON.stringify(payload))
+            .then(r => {
+              console.log(`Committed: ${JSON.stringify(r)}`);
+              return r;
+            })
+            .catch(e => {
+              console.log(`Error: ${JSON.stringify(e)}`);
+              throw {message: e};
+            });
+        } else {
+          throw e;
+        }
       });
   }
 
@@ -72,21 +92,24 @@ export class PBFTClient {
     const responseMap = new Proxy(new Map(), {get: (map, name) => name in map ? map[name] : 0});
 
     return new Promise((resolve, reject) => {
-      var promiseResolved = false;
-      const processResponse = (response) => {
+      let promiseResolved = false;
+      const processResponse = response => {
         const status = response.status;
         const statusText = response.statusText;
           if (response.ok) {
               response.json().then(body => {
-                let res = `${status} ${statusText} ${body}`;
+                const res = `${status} ${statusText} ${body}`;
                 console.log(`Received Response ${res}`);
                 if ((responseMap[res] += 1) == this.F + 1 && !promiseResolved) {
                   promiseResolved = true;
                   resolve({status, statusText, body});
-                }});
+                } });
           } else {
-            response.text().then(body => {
-              let error = `${status} ${statusText} ${body}`;
+            (response.text == undefined
+             ? Promise.resolve("")
+             : response.text())
+              .then(body => {
+              const error = `${status} ${statusText} ${body}`;
               console.log(`Received Failure ${error}`);
               responseMap[error] += 1;
               if (responseMap[error] == this.F + 1 && !promiseResolved) {
@@ -103,7 +126,7 @@ export class PBFTClient {
                  Promise.race([
                    promise,
                    new Promise((_, reject) => window.setTimeout(() => {
-                     reject({status: 520 , statusText: "Request Timeout"});
+                     reject({status: 520, statusText: "Request Timeout"});
                    }, 7000))]))
             .forEach(promise => promise.then(processResponse).catch(processResponse));
     });

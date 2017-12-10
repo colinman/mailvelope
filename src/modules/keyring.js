@@ -620,37 +620,41 @@ export class Keyring {
     let newKey = null;
     let email = null;
     return Promise.resolve()
-    .then(() => {
-      email = userIds[0].email;
-      userIds = userIds.map(userId => {
-        if (userId.fullName) {
-          return (new goog.format.EmailAddress(userId.email, userId.fullName)).toString();
-        } else {
-          return `<${userId.email}>`;
+      .then(() => {
+        email = userIds[0].email;
+        userIds = userIds.map(userId => {
+          if (userId.fullName) {
+            return (new goog.format.EmailAddress(userId.email, userId.fullName)).toString();
+          } else {
+            return `<${userId.email}>`;
+          }
+        });
+        return openpgp.generateKey({userIds, passphrase, numBits: parseInt(numBits), keyExpirationTime, unlocked});
+      })
+      .then(data => {
+        newKey = data;
+        this.keyring.privateKeys.push(newKey.key);
+        this.sync.add(newKey.key.primaryKey.getFingerprint(), keyringSync.INSERT);
+      })
+      .then(() => this.keyring.store())
+      .then(() => this.sync.commit())
+      .then(() => {
+        // by no primary key in the keyring set the generated key as primary
+        if (!this.hasPrimaryKey()) {
+          return setKeyringAttr(this.id, {primary_key: newKey.key.primaryKey.keyid.toHex().toUpperCase()});
         }
+      })
+      .then(() => {
+        // upload public key
+        if (uploadPublicKey) {
+          return keyServer.upload({email, publicKeyArmored: newKey.publicKeyArmored});
+        }
+      })
+      .then(() => newKey)
+      .catch(e => {
+        this.removeKey(newKey.key.primaryKey.getFingerprint(), 'private');
+        throw e;
       });
-      return openpgp.generateKey({userIds, passphrase, numBits: parseInt(numBits), keyExpirationTime, unlocked});
-    })
-    .then(data => {
-      newKey = data;
-      this.keyring.privateKeys.push(newKey.key);
-      this.sync.add(newKey.key.primaryKey.getFingerprint(), keyringSync.INSERT);
-    })
-    .then(() => this.keyring.store())
-    .then(() => this.sync.commit())
-    .then(() => {
-      // by no primary key in the keyring set the generated key as primary
-      if (!this.hasPrimaryKey()) {
-        return setKeyringAttr(this.id, {primary_key: newKey.key.primaryKey.keyid.toHex().toUpperCase()});
-      }
-    })
-    .then(() => {
-      // upload public key
-      if (uploadPublicKey) {
-        return keyServer.upload({email: email, publicKeyArmored: newKey.publicKeyArmored});
-      }
-    })
-    .then(() => newKey);
   }
 
   getKeyForSigning(keyIdHex) {
