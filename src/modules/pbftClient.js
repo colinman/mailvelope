@@ -78,19 +78,22 @@ export class PBFTClient {
         const statusText = response.statusText;
           if (response.ok) {
               response.json().then(body => {
-                  console.log(`Received Response ${status} ${statusText} ${body}`);
-                  if ((responseMap[`${status}${statusText}${body}`] += 1) == this.F + 1 && !promiseResolved) {
-                    promiseResolved = true;
-                    resolve({status, statusText, body});
-                  }});
+                let res = `${status} ${statusText} ${body}`;
+                console.log(`Received Response ${res}`);
+                if ((responseMap[res] += 1) == this.F + 1 && !promiseResolved) {
+                  promiseResolved = true;
+                  resolve({status, statusText, body});
+                }});
           } else {
-              console.log(`Received Failure ${status} ${statusText}`);
-              var key = `${status}${statusText}`;
-              responseMap[key] += 1;
-              if (responseMap[key] == this.F + 1 && !promiseResolved) {
+            response.text().then(body => {
+              let error = `${status} ${statusText} ${body}`;
+              console.log(`Received Failure ${error}`);
+              responseMap[error] += 1;
+              if (responseMap[error] == this.F + 1 && !promiseResolved) {
                 promiseResolved = true;
-                reject(`${status} ${statusText}`);
+                reject(error);
               }
+            });
           }
       };
 
