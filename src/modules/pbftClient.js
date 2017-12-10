@@ -9,7 +9,7 @@
 export class PBFTClient {
   constructor(config) {
     this.nodes = config["nodes"];
-    this.F = (this.nodes.length - 1) / 3;
+    this.F = Math.ceil((this.nodes.length - 1) / 3);
   }
 
   /**
@@ -17,7 +17,15 @@ export class PBFTClient {
    * @param {string} email         email address to look up by
    */
   lookup(email) {
-    return this._broadcast(this._path(email));
+      return this._broadcast(this._path(email))
+      .then(r => {
+        console.log(`Looked Up: ${JSON.stringify(r)}`);
+        return r;
+      })
+      .catch(e => {
+        console.log(`Error: ${JSON.stringify(e)}`);
+        throw e;
+      });
   }
 
   /**
@@ -40,7 +48,14 @@ export class PBFTClient {
       publicKeyArmored: options.publicKeyArmored};
 
     return this._broadcast(this._path(options.email), "POST", JSON.stringify(payload))
-      .then(this._checkStatus);
+      .then(r => {
+        console.log(`Committed: ${JSON.stringify(r)}`);
+        return r;
+      })
+      .catch(e => {
+        console.log(`Error: ${JSON.stringify(e)}`);
+        throw e;
+      });
   }
 
   /**
@@ -60,24 +75,29 @@ export class PBFTClient {
       const processResponse = (response) => {
         const status = response.status;
         const statusText = response.statusText;
-        response.json().then(body => {
-          if ((responseMap[`${status}${statusText}${body}`] += 1) >= this.F + 1) {
-            response.ok ?
-              resolve({status, statusText, body}) :
-              reject(status, statusText, body);
+          if (response.ok) {
+              response.json().then(body => {
+                  console.log(`Received Response ${status} ${statusText} ${body}`);
+                  if ((responseMap[`${status}${statusText}${body}`] += 1) == this.F + 1) {
+                      resolve({status, statusText, body});
+                  }});
+          } else {
+              console.log(`Received Failure ${status} ${statusText}`);
+              var key = `${status}${statusText}`;
+              responseMap[key] += 1;
+              if (responseMap[key] == this.F + 1) {
+                  reject(`${status} ${statusText}`);
+              }
           }
-        });
       };
 
       this.nodes
-      .map(node => window.fetch(
-        `http://${node["host"]}:${node["clientport"]}${path}`,
-        options))
-      .map(promise =>
-           Promise.race([
-             promise,
-             new Promise((_, reject) => window.setTimeout(() => reject("Request Timeout"), 7000))]))
-      .forEach(promise => promise.then(processResponse).catch(processResponse));
+            .map(node => window.fetch(`http://${node["host"]}:${node["clientport"]}${path}`, options))
+            .map(promise =>
+                 Promise.race([
+                     promise,
+                     new Promise((_, reject) => window.setTimeout(() => reject({status: 520 , statusText: "Request Timeout"}), 7000))]))
+            .forEach(promise => promise.then(processResponse).catch(processResponse));
     });
   }
 

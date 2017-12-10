@@ -42,14 +42,15 @@ export default class KeyServer {
    * @yield {Object}                       The public key object
    */
   lookup(options) {
-    console.log(`Lookup ${options.email}`);
+    console.log(`Lookup ${JSON.stringify(options)}`);
     if (!options.email) {
       return Promise.reject("Only lookup by email is currently supported by PBFT");
     }
 
     return this.getPBFTClient()
       .then(client => client.lookup(options.email))
-      .then(response => JSON.parse(response.body));
+      .then(response => JSON.parse(response.body))
+      .catch(error => console.log(error));
   }
 
   /**
@@ -61,14 +62,13 @@ export default class KeyServer {
    * @yield {undefined}
    */
   upload(options) {
-    console.log(`Upload ${options}`);
+    console.log(`Upload ${JSON.stringify(options)}`);
     const payload = {publicKeyArmored: options.publicKeyArmored};
     if (options.primaryEmail) {
       payload.primaryEmail = options.primaryEmail;
     }
-    this.getPBFTClient()
-      .then(client => client.upload(options))
-      .then(this._checkStatus);
+    return this.getPBFTClient()
+          .then(client => client.upload(options));
   }
 
   /**
