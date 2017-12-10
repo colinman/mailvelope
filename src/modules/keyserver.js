@@ -4,19 +4,25 @@
  */
 
 import {prefs} from './prefs';
+import {PBFTClient} from './pbftClient.js';
 
 /**
- * @fileOverview A simple HTTP client for Mailvelope Key Server's REST api.
+ * @fileOverview A simple wrapper backed by PBFTClient
  */
 
 /**
- * Creates an instance of the keyserver client.
- * @param {Object} mvelo      An instance of the mvelo lib
+ * Creates an instance of the keyserver.
  * @param {String} baseUrl    (optional) The server's base url
  */
 export default class KeyServer {
-  constructor(baseUrl) {
-    this._baseUrl = baseUrl || 'https://keys.mailvelope.com';
+  getPBFTClient() {
+    if (this._pbftClient) {
+      return Promise.resolve(this._pbftClient);
+    } else {
+      return window.fetch(chrome.runtime.getURL("config/cluster.json"))
+        .then(response => response.json())
+        .then(response => new PBFTClient(response));
+    }
   }
 
   /**
@@ -36,12 +42,14 @@ export default class KeyServer {
    * @yield {Object}                       The public key object
    */
   lookup(options) {
-    return window.fetch(this._url(options))
-    .then(response => {
-      if (response.status === 200) {
-        return response.json();
-      }
-    });
+    console.log(`Lookup ${options.email}`);
+    if (!options.email) {
+      return Promise.reject("Only lookup by email is currently supported by PBFT");
+    }
+
+    return this.getPBFTClient()
+      .then(client => client.lookup(options.email))
+      .then(response => JSON.parse(response.body));
   }
 
   /**
@@ -53,15 +61,14 @@ export default class KeyServer {
    * @yield {undefined}
    */
   upload(options) {
+    console.log(`Upload ${options}`);
     const payload = {publicKeyArmored: options.publicKeyArmored};
     if (options.primaryEmail) {
       payload.primaryEmail = options.primaryEmail;
     }
-    return window.fetch(this._url(), {
-      method: 'POST',
-      body: JSON.stringify(payload)
-    })
-    .then(this._checkStatus);
+    this.getPBFTClient()
+      .then(client => client.upload(options))
+      .then(this._checkStatus);
   }
 
   /**

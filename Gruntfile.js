@@ -14,6 +14,9 @@ module.exports = function(grunt) {
       options: {
         maxWarnings: 10,
         configFile: 'config/eslint.json',
+        rules: {
+          indent: 0
+        },
         cache: true
       },
       target: [
@@ -41,7 +44,7 @@ module.exports = function(grunt) {
 
       dep: {
         files: [
-          {
+           {
             expand: true,
             flatten: true,
             src: 'node_modules/jquery/dist/jquery.min.js',
@@ -136,6 +139,7 @@ module.exports = function(grunt) {
             'app/app.html',
             'client-API/*',
             'components/**/*',
+            'config/**',
             '!components/editor/**/*.js',
             '!components/util/**/*',
             'content-scripts/*.css',

@@ -43,6 +43,7 @@
     "components/restore-backup/restoreBackupDialog.html",
     "components/editor/editor.html",
     "components/verify-inline/verifyInlineSig.css",
+    "config/cluster.json",
     "content-scripts/framestyles.css",
     "dep/bootstrap/css/bootstrap.css",
     "dep/bootstrap/fonts/glyphicons-halflings-regular.eot",

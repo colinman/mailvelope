@@ -618,8 +618,10 @@ export class Keyring {
    */
   generateKey({numBits, userIds, passphrase, uploadPublicKey, keyExpirationTime, unlocked = false}) {
     let newKey = null;
+    let email = null;
     return Promise.resolve()
     .then(() => {
+      email = userIds[0].email;
       userIds = userIds.map(userId => {
         if (userId.fullName) {
           return (new goog.format.EmailAddress(userId.email, userId.fullName)).toString();
@@ -645,7 +647,7 @@ export class Keyring {
     .then(() => {
       // upload public key
       if (uploadPublicKey) {
-        return keyServer.upload({publicKeyArmored: newKey.publicKeyArmored});
+        return keyServer.upload({email: email, publicKeyArmored: newKey.publicKeyArmored});
       }
     })
     .then(() => newKey);
