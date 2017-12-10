@@ -61,7 +61,8 @@ export class PBFTClient {
       .catch(e => {
         // Semi-hacky way to see if lookup returned with NOT FOUND
         if (e.startsWith(404)) {
-          const signature = window.prompt("This is a new email. Please acquire signature for key and paste here");
+          console.log(`The following is your public key: \n\n\n${options.publicKeyArmored}`);
+          const signature = window.prompt(`This is a new email. Please acquire signature from domain authority and paste here. The public key can be copied from the console`);
           console.log(signature);
           return this._broadcast(this._path(options.email), "POST", JSON.stringify(payload))
             .then(r => {

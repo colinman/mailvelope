@@ -19,9 +19,7 @@ export default function NameAddrInput({value: {name, email, errors = {}}, onChan
   return (
     <div>
       <div className="form-group">
-        <label className="control-label" htmlFor="name">{l10n.map.keygrid_user_name}</label>
-        <input type="text" value={name} className="form-control" id="name" onChange={onChange} disabled={disabled} />
-        <span className="help-block">{l10n.map.key_gen_name_help}</span>
+        <input type="hidden" value={name} className="form-control" id="name" onChange={onChange} disabled={disabled} />
       </div>
       <div className={`form-group${errors.email ? ' has-error' : ''}`}>
         <label className="control-label" htmlFor="email">{demail ? l10n.map.key_gen_demail : l10n.map.keygrid_user_email}</label>
