@@ -49,7 +49,7 @@ export default class KeyServer {
 
     return this.getPBFTClient()
       .then(client => client.lookup(options.email))
-      .then(response => JSON.parse(response.body))
+      .then(response => JSON.parse(response))
       .catch(error => console.log(error));
   }
 

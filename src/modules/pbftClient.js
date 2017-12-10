@@ -20,7 +20,19 @@ export class PBFTClient {
       return this._broadcast(this._path(email))
       .then(r => {
         console.log(`Looked Up: ${JSON.stringify(r)}`);
-        return r;
+
+        // Format this in a way that Mailvelope expects, with dummy fields for now
+        const payload = {
+          keyId: "keyid",
+          fingerprint: "fingerprint",
+          userIds: [
+            {name: "name", email: email, verified: true}],
+          created: "2017-12-10T03: 03: 20.763Z",
+          uploaded: "2017-12-10T03: 03: 20.763Z",
+          algorithm: "rsa_encrypt_sign",
+          keySize: 4096,
+          publicKeyArmored: r.body};
+        return JSON.stringify(payload);
       })
       .catch(e => {
         console.log(`Error: ${JSON.stringify(e)}`);
@@ -35,21 +47,12 @@ export class PBFTClient {
    * @yield {undefined}
    */
   upload(options) {
-    // Workaround since PBFT server is just a KV store
-    const payload = {
-      keyId: "keyid",
-      fingerprint: "fingerprint",
-      userIds: [
-        {name: "name", email: options.email, verified: true}],
-      created: "2017-12-10T03: 03: 08.000Z",
-      uploaded: "2017-12-10T03: 03: 20.763Z",
-      algorithm: "rsa_encrypt_sign",
-      keySize: 4096,
-      publicKeyArmored: options.publicKeyArmored};
-
+    const email = options.email;
+    const publicKey = options.publicKeyArmored;
+    
     // Lookup first to see if we need to ask for a signature
-    return this.lookup(options.email)
-      .then(() => this._broadcast(this._path(options.email), "PUT", JSON.stringify(payload))
+    return this.lookup(email)
+      .then(() => this._broadcast("", "PUT", this.constructKeyPayload(email, publicKey))
             .then(r => {
               console.log(`Committed: ${JSON.stringify(r)}`);
               return r;
@@ -61,10 +64,10 @@ export class PBFTClient {
       .catch(e => {
         // Semi-hacky way to see if lookup returned with NOT FOUND
         if (e.startsWith(404)) {
-          console.log(`The following is your public key: \n\n\n${options.publicKeyArmored}`);
+          console.log(`The following is your public key: \n\n\n${publicKey}`);
           const signature = window.prompt(`This is a new email. Please acquire signature from domain authority and paste here. The public key can be copied from the console`);
           console.log(signature);
-          return this._broadcast(this._path(options.email), "POST", JSON.stringify(payload))
+          return this._broadcast("", "POST", this.constructKeyPayload(email, publicKey))
             .then(r => {
               console.log(`Committed: ${JSON.stringify(r)}`);
               return r;
@@ -77,6 +80,14 @@ export class PBFTClient {
           throw e;
         }
       });
+  }
+
+  constructKeyPayload(email, publicKey) {
+    return JSON.stringify({
+      alias: email,
+      key: publicKey,
+      timestamp: Date.now()
+    });
   }
 
   /**
