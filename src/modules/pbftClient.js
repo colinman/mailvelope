@@ -54,7 +54,7 @@ export class PBFTClient {
       })
       .catch(e => {
         console.log(`Error: ${JSON.stringify(e)}`);
-        throw e;
+        throw {message: e};
       });
   }
 
@@ -72,21 +72,24 @@ export class PBFTClient {
     const responseMap = new Proxy(new Map(), {get: (map, name) => name in map ? map[name] : 0});
 
     return new Promise((resolve, reject) => {
+      var promiseResolved = false;
       const processResponse = (response) => {
         const status = response.status;
         const statusText = response.statusText;
           if (response.ok) {
               response.json().then(body => {
                   console.log(`Received Response ${status} ${statusText} ${body}`);
-                  if ((responseMap[`${status}${statusText}${body}`] += 1) == this.F + 1) {
-                      resolve({status, statusText, body});
+                  if ((responseMap[`${status}${statusText}${body}`] += 1) == this.F + 1 && !promiseResolved) {
+                    promiseResolved = true;
+                    resolve({status, statusText, body});
                   }});
           } else {
               console.log(`Received Failure ${status} ${statusText}`);
               var key = `${status}${statusText}`;
               responseMap[key] += 1;
-              if (responseMap[key] == this.F + 1) {
-                  reject(`${status} ${statusText}`);
+              if (responseMap[key] == this.F + 1 && !promiseResolved) {
+                promiseResolved = true;
+                reject(`${status} ${statusText}`);
               }
           }
       };
@@ -95,8 +98,10 @@ export class PBFTClient {
             .map(node => window.fetch(`http://${node["host"]}:${node["clientport"]}${path}`, options))
             .map(promise =>
                  Promise.race([
-                     promise,
-                     new Promise((_, reject) => window.setTimeout(() => reject({status: 520 , statusText: "Request Timeout"}), 7000))]))
+                   promise,
+                   new Promise((_, reject) => window.setTimeout(() => {
+                     reject({status: 520 , statusText: "Request Timeout"});
+                   }, 7000))]))
             .forEach(promise => promise.then(processResponse).catch(processResponse));
     });
   }
