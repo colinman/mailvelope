@@ -52,7 +52,7 @@ export class PBFTClient {
     
     // Lookup first to see if we need to ask for a signature
     return this.lookup(email)
-      .then(() => this._broadcast("", "PUT", this.constructKeyPayload(email, publicKey))
+      .then(() => this._broadcast("", "PUT", this.signPayload(this.genPayload(email, publicKey)))
             .then(r => {
               console.log(`Committed: ${JSON.stringify(r)}`);
               return r;
@@ -67,7 +67,7 @@ export class PBFTClient {
           console.log(`The following is your public key: \n\n\n${publicKey}`);
           const signature = window.prompt(`This is a new email. Please acquire signature from domain authority and paste here. The public key can be copied from the console`);
           console.log(signature);
-          return this._broadcast("", "POST", this.constructKeyPayload(email, publicKey))
+          return this._broadcast("", "POST", this.appendSignature(this.genPayload(email, publicKey), signature))
             .then(r => {
               console.log(`Committed: ${JSON.stringify(r)}`);
               return r;
@@ -82,12 +82,22 @@ export class PBFTClient {
       });
   }
 
-  constructKeyPayload(email, publicKey) {
-    return JSON.stringify({
+  genPayload(email, publicKey) {
+    return {
       alias: email,
       key: publicKey,
       timestamp: Date.now()
-    });
+    };
+  }
+
+  signPayload(payload) {
+    return this.appendSignature(payload);
+    // TODO: Add real signature
+  }
+
+  appendSignature(payload, signature) {
+    payload["signature"] = signature;
+    return payload;
   }
 
   /**
@@ -100,7 +110,7 @@ export class PBFTClient {
    */
 
   _broadcast(path, method, body) {
-    const options = body ? {method, body} : {method: "GET"};
+    const options = body ? {method, body: JSON.stringify(body)} : {method: "GET"};
     const responseMap = new Proxy(new Map(), {get: (map, name) => name in map ? map[name] : 0});
 
     return new Promise((resolve, reject) => {
