@@ -2,6 +2,11 @@
  * @fileOverview Client to PBFT implementation: https://github.com/sydneyli/distributePKI
  */
 
+import mvelo from '../lib/lib-mvelo';
+import * as keyring from '../modules/keyring';
+import * as openpgp from 'openpgp';
+import * as pgpModel from '../modules/pgpModel';
+
 /**
  * Creates an instance of the keyserver client.
  * @param {Object} config    PBFT cluster configuration
@@ -49,12 +54,20 @@ export class PBFTClient {
   upload(options) {
     const email = options.email;
     const publicKey = options.publicKeyArmored;
-    
+    var oldPrivateKey;
+
     // Lookup first to see if we need to ask for a signature
     return this.lookup(email)
-      .then(() => this._broadcast("", "PUT", this.signPayload(this.genPayload(email, publicKey)))
+      .then(() => this.findPrivateKey(email))
+      .then(key => {
+        oldPrivateKey = key;
+        return this.signPayload(this.genPayload(email, publicKey), key);
+      })
+      .then(signedPayload => this._broadcast("", "PUT", signedPayload)
             .then(r => {
               console.log(`Committed: ${JSON.stringify(r)}`);
+              const ring = keyring.getById(mvelo.LOCAL_KEYRING_ID);
+              ring.removeKey(oldPrivateKey.primaryKey.fingerprint, "private");
               return r;
             })
             .catch(e => {
@@ -63,7 +76,7 @@ export class PBFTClient {
             }))
       .catch(e => {
         // Semi-hacky way to see if lookup returned with NOT FOUND
-        if (e.startsWith(404)) {
+        if (typeof e === "string" && e.startsWith(404)) {
           console.log(`The following is your public key: \n\n\n${publicKey}`);
           const signature = window.prompt(`This is a new email. Please acquire signature from domain authority and paste here. The public key can be copied from the console`);
           console.log(signature);
@@ -90,14 +103,24 @@ export class PBFTClient {
     };
   }
 
-  signPayload(payload) {
-    return this.appendSignature(payload);
-    // TODO: Add real signature
+  signPayload(payload, key) {
+    const toSign = JSON.stringify(payload);
+    return openpgp.sign({data: toSign, privateKeys: key})
+      .then(msg => msg.data)
+      .then(signature => this.appendSignature(payload, signature));
   }
 
   appendSignature(payload, signature) {
     payload["signature"] = signature;
     return payload;
+  }
+
+  findPrivateKey(email) {
+    const ring = keyring.getById(mvelo.LOCAL_KEYRING_ID);
+    const lockedKeys = ring.getKeyByAddress([email], {pub: false, priv: true});
+    const lockedKey = lockedKeys[email][0];
+    console.log(lockedKey);
+    return pgpModel.unlockKey(lockedKey, " ");
   }
 
   /**
@@ -110,7 +133,7 @@ export class PBFTClient {
    */
 
   _broadcast(path, method, body) {
-    const options = body ? {method, body: JSON.stringify(body)} : {method: "GET"};
+    const options = method ? {method, body: JSON.stringify(body)} : {method: "GET"};
     const responseMap = new Proxy(new Map(), {get: (map, name) => name in map ? map[name] : 0});
 
     return new Promise((resolve, reject) => {
@@ -118,19 +141,19 @@ export class PBFTClient {
       const processResponse = response => {
         const status = response.status;
         const statusText = response.statusText;
-          if (response.ok) {
-              response.json().then(body => {
-                const res = `${status} ${statusText} ${body}`;
-                console.log(`Received Response ${res}`);
-                if ((responseMap[res] += 1) == this.F + 1 && !promiseResolved) {
-                  promiseResolved = true;
-                  resolve({status, statusText, body});
-                } });
-          } else {
-            (response.text == undefined
-             ? Promise.resolve("")
-             : response.text())
-              .then(body => {
+        if (response.ok) {
+          response.json().then(body => {
+            const res = `${status} ${statusText} ${body}`;
+            console.log(`Received Response ${res}`);
+            if ((responseMap[res] += 1) == this.F + 1 && !promiseResolved) {
+              promiseResolved = true;
+              resolve({status, statusText, body});
+            } });
+        } else {
+          (response.text == undefined
+           ? Promise.resolve("")
+           : response.text())
+            .then(body => {
               const error = `${status} ${statusText} ${body}`;
               console.log(`Received Failure ${error}`);
               responseMap[error] += 1;
@@ -139,18 +162,18 @@ export class PBFTClient {
                 reject(error);
               }
             });
-          }
+        }
       };
 
       this.nodes
-            .map(node => window.fetch(`http://${node["host"]}:${node["clientport"]}${path}`, options))
-            .map(promise =>
-                 Promise.race([
-                   promise,
-                   new Promise((_, reject) => window.setTimeout(() => {
-                     reject({status: 520, statusText: "Request Timeout"});
-                   }, 7000))]))
-            .forEach(promise => promise.then(processResponse).catch(processResponse));
+        .map(node => window.fetch(`http://${node["host"]}:${node["clientport"]}${path}`, options))
+        .map(promise =>
+             Promise.race([
+               promise,
+               new Promise((_, reject) => window.setTimeout(() => {
+                 reject({status: 520, statusText: "Request Timeout"});
+               }, 7000))]))
+        .forEach(promise => promise.then(processResponse).catch(processResponse));
     });
   }
 

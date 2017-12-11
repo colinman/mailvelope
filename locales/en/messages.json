@@ -345,7 +345,7 @@
   },
   "key_gen_another": {
     "description": "Key import button",
-    "message": "Clear"
+    "message": "Do Another"
   },
   "key_gen_demail": {
     "description": "De-Mail address name.",
