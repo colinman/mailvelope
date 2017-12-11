@@ -58,7 +58,7 @@ export class PBFTClient {
 
     // Lookup first to see if we need to ask for a signature
     return this.lookup(email)
-      .then(() => this.findPrivateKey(email))
+      .then(() => this.findPrivateKey(email, publicKey))
       .then(key => {
         oldPrivateKey = key;
         return this.signPayload(this.genPayload(email, publicKey), key);
@@ -105,8 +105,8 @@ export class PBFTClient {
 
   signPayload(payload, key) {
     const toSign = JSON.stringify(payload);
-    return openpgp.sign({data: toSign, privateKeys: key})
-      .then(msg => msg.data)
+    return openpgp.sign({data: toSign, privateKeys: key, armor: true, detached: true})
+      .then(res => res.signature)
       .then(signature => this.appendSignature(payload, signature));
   }
 
@@ -115,12 +115,19 @@ export class PBFTClient {
     return payload;
   }
 
-  findPrivateKey(email) {
+  findPrivateKey(email, exclude) {
+    const excludeKey = openpgp.key.readArmored(exclude).keys[0];
+    console.log(openpgp.key.readArmored(exclude));
     const ring = keyring.getById(mvelo.LOCAL_KEYRING_ID);
     const lockedKeys = ring.getKeyByAddress([email], {pub: false, priv: true});
-    const lockedKey = lockedKeys[email][0];
-    console.log(lockedKey);
-    return pgpModel.unlockKey(lockedKey, " ");
+    console.log(lockedKeys);
+    const lockedKeysEx = lockedKeys[email].filter(k => k.primaryKey.fingerprint != excludeKey.primaryKey.fingerprint);
+    if (lockedKeysEx.length == 0 || lockedKeysEx === undefined || lockedKeysEx === null) {
+      throw Error("You do not own the key for the email " + email + " so you cannot update it.");      
+    }
+    const lockedKey = lockedKeysEx[0];
+    let passphrase = prompt("What is the password for the old key?");
+    return pgpModel.unlockKey(lockedKey, passphrase);
   }
 
   /**
