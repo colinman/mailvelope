@@ -76,6 +76,9 @@ export class PBFTClient {
               throw {message: e};
             }))
       .catch(e => {
+        // Note: For demo purposes, try to update with authority server signature even when private key is not found locally
+        // Semi-hacky way to see if lookup returned with NOT FOUND
+        // if (typeof e === "string" && e.startsWith(404)) {
           console.log(`The following is your public key: \n\n\n${publicKey}`);
           return window.fetch(`http://localhost:8080/sign`, {method: "POST", body: JSON.stringify(payload)})
                 .then(raw => raw.json())
@@ -90,6 +93,9 @@ export class PBFTClient {
                     console.log(`Error: ${JSON.stringify(e)}`);
                     throw {message: e};
                 });
+        // } else {
+        //     throw e;
+        // }
      });
   }
 
