@@ -75,7 +75,7 @@ export class PBFTClient {
               console.log(`Error: ${JSON.stringify(e)}`);
               throw {message: e};
             }))
-      .catch(e => {
+      .catch(() => {
         // Note: For demo purposes, try to update with authority server signature even when private key is not found locally
         // Semi-hacky way to see if lookup returned with NOT FOUND
         // if (typeof e === "string" && e.startsWith(404)) {
