@@ -55,13 +55,14 @@ export class PBFTClient {
     const email = options.email;
     const publicKey = options.publicKeyArmored;
     var oldPrivateKey;
+    var payload = this.genPayload(email, publicKey);
 
     // Lookup first to see if we need to ask for a signature
     return this.lookup(email)
       .then(() => this.findPrivateKey(email, publicKey))
       .then(key => {
         oldPrivateKey = key;
-        return this.signPayload(this.genPayload(email, publicKey), key);
+        return this.signPayload(payload, key);
       })
       .then(signedPayload => this._broadcast("", "PUT", signedPayload)
             .then(r => {
@@ -75,24 +76,21 @@ export class PBFTClient {
               throw {message: e};
             }))
       .catch(e => {
-        // Semi-hacky way to see if lookup returned with NOT FOUND
-        if (typeof e === "string" && e.startsWith(404)) {
           console.log(`The following is your public key: \n\n\n${publicKey}`);
-          const signature = window.prompt(`This is a new email. Please acquire signature from domain authority and paste here. The public key can be copied from the console`);
-          console.log(signature);
-          return this._broadcast("", "POST", this.appendSignature(this.genPayload(email, publicKey), signature))
-            .then(r => {
-              console.log(`Committed: ${JSON.stringify(r)}`);
-              return r;
-            })
-            .catch(e => {
-              console.log(`Error: ${JSON.stringify(e)}`);
-              throw {message: e};
-            });
-        } else {
-          throw e;
-        }
-      });
+          return window.fetch(`http://localhost:8080/sign`, {method: "POST", body: JSON.stringify(payload)})
+                .then(raw => raw.json())
+                .then(result => {
+                    return this._broadcast("", "POST", this.appendSignature(payload, result.Signature));
+                })
+                .then(r => {
+                    console.log(`Committed: ${JSON.stringify(r)}`);
+                    return r;
+                })
+                .catch(e => {
+                    console.log(`Error: ${JSON.stringify(e)}`);
+                    throw {message: e};
+                });
+     });
   }
 
   genPayload(email, publicKey) {
